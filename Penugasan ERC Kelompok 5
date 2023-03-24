@@ -1,0 +1,157 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h> // Library for LCD
+LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 20, 4);
+
+const int sampleWindow = 50;// Sample window width in mS (50 mS = 20Hz)
+unsigned int sample;
+
+#define SENSOR_PIN A0
+#define TRIGGER1 D3
+#define TRIGGER2 D5
+#define ECHO1 D4
+#define ECHO2 D6
+// #define ledMerah1 26
+// #define ledMerah2 14
+#define ledHijau1 D7
+#define ledHijau2 D8
+
+void setup()
+{
+  
+
+//  Signal pin
+  pinMode (SENSOR_PIN, INPUT); 
+
+// Ultrasonic 1
+  pinMode(TRIGGER1, OUTPUT);
+  pinMode(ECHO1, INPUT);
+  pinMode(ledHijau1, OUTPUT);
+  // pinMode(ledMerah1, OUTPUT);
+
+//Ultrasonic 2
+  pinMode(TRIGGER2, OUTPUT);
+  pinMode(ECHO2, INPUT);
+  pinMode(ledHijau2, OUTPUT);
+  // pinMode(ledMerah2, OUTPUT);
+
+  Serial.begin(115200);
+  lcd.begin();
+ 
+// Turn on the backlight.
+  lcd.backlight();
+  lcd.clear();
+}
+
+long readSonic(int trigPin, int echoPin, int led2 )
+{
+  long duration, jarak;
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  duration = pulseIn(echoPin, HIGH);
+  jarak = (duration/2)/29.1;
+  Serial.println("Jarak :");
+  Serial.println(jarak);
+  Serial.println(" cm");
+
+  if (jarak <= 30)
+  {
+    // digitalWrite(led1, HIGH);
+    digitalWrite(led2, LOW);
+    return jarak;
+  } 
+  
+  else 
+  {
+    // digitalWrite(led1, LOW);
+    digitalWrite(led2, HIGH);
+    return jarak;
+  }
+}
+
+int soundSensor ()  
+{ 
+   unsigned long startMillis= millis();                   // Start of sample window
+   float peakToPeak = 0;                                  // peak-to-peak level
+ 
+   unsigned int signalMax = 0;                            //minimum value
+   unsigned int signalMin = 1024;                         //maximum value
+ 
+                                                          // collect data for 50 mS
+   while (millis() - startMillis < sampleWindow)
+   {
+      sample = analogRead(SENSOR_PIN);                    //get reading from microphone
+      if (sample < 1024)                                  // toss out spurious readings
+      {
+         if (sample > signalMax)
+         {
+            signalMax = sample;                           // save just the max levels
+         }
+         else if (sample < signalMin)
+         {
+            signalMin = sample;                           // save just the min levels
+         }
+      }
+   }
+ 
+   peakToPeak = signalMax - signalMin;                    // max - min = peak-peak amplitude
+   int db = map(peakToPeak,20,900,49.5,90);             //calibrate for deciBels
+   return db;
+}
+
+void printSound (int db)
+{
+    lcd.setCursor(0, 0);
+    lcd.print("Loudness: ");
+    lcd.print(db);
+    lcd.print("dB");
+    
+    if (db <= 60)
+    {
+      lcd.setCursor(0, 1);
+      lcd.print("Level: Quite");
+      // digitalWrite(PIN_QUIET, HIGH);
+      // digitalWrite(PIN_MODERATE, LOW);
+      // digitalWrite(PIN_LOUD, LOW);
+    }
+    
+    else if (db > 60 && db<85)
+    {
+      lcd.setCursor(0, 1);
+      lcd.print("Level: Moderate");
+      // digitalWrite(PIN_QUIET, LOW);
+      // digitalWrite(PIN_MODERATE, HIGH);
+      // digitalWrite(PIN_LOUD, LOW);
+    }
+    
+    else if (db>=85)
+    {
+      lcd.setCursor(0, 1);
+      lcd.print("Level: High");
+      // digitalWrite(PIN_QUIET, LOW);
+      // digitalWrite(PIN_MODERATE, LOW);
+      // digitalWrite(PIN_LOUD, HIGH);
+    }
+}
+
+void printJarak (int id, long jarak)
+{
+  lcd.setCursor(0, id+1);
+  lcd.print("Jarak ");
+  lcd.print(id);
+  lcd.print(": ");
+  lcd.print(jarak);
+  lcd.print(" cm");
+}
+
+
+void loop()
+{
+  lcd.clear();
+  printSound(soundSensor());
+  printJarak(1, readSonic(TRIGGER1, ECHO1, ledHijau1));
+  printJarak(2, readSonic(TRIGGER2, ECHO2, ledHijau2));
+  delay(500);
+}
