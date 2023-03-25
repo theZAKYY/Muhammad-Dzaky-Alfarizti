@@ -1,0 +1,105 @@
+#include <WiFi.h>
+#include <esp_now.h>
+
+#define triggerPin1 2
+#define triggerPin2 12
+#define echoPin1 4
+#define echoPin2 13
+#define ledMerah1 18
+#define ledHijau1 19
+#define ledMerah2 27
+#define ledHijau2 26
+
+float data_us[2];
+
+uint8_t broadcastAddress[] = {0x44, 0x17, 0x93, 0x10, 0x09, 0xF0};
+esp_now_peer_info_t peerInfo;
+
+void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+  Serial.print("\r\nLast Packet Send Status:\t");
+  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+}
+
+typedef struct struct_message {
+ float us1;
+ float us2;
+ 
+} struct_message;
+
+struct_message data;
+
+void setup(){
+  Serial.begin (115200);
+
+  WiFi.mode(WIFI_STA);
+
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("Error initializing ESP-NOW");
+    return;
+  }
+
+  esp_now_register_send_cb(OnDataSent);
+
+  memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+  peerInfo.channel = 0;  
+  peerInfo.encrypt = false;
+        
+  if (esp_now_add_peer(&peerInfo) != ESP_OK){
+    Serial.println("Failed to add peer");
+    return;
+  }
+  
+  pinMode(triggerPin1, OUTPUT);
+  pinMode(echoPin1, INPUT);
+  pinMode(ledHijau1, OUTPUT);
+  pinMode(ledMerah1, OUTPUT);
+
+  pinMode(triggerPin2, OUTPUT);
+  pinMode(echoPin2, INPUT);
+  pinMode(ledHijau2, OUTPUT);
+  pinMode(ledMerah2, OUTPUT);
+
+}
+
+void ultrasonic(int triggPin, int echoPin, int ledM, int ledH, int i){
+  long duration, jarak;
+  digitalWrite(triggPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(triggPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(triggPin, LOW);
+  duration = pulseIn(echoPin, HIGH);
+  jarak = (duration/2)/29.1;+
+  Serial.print("Jarak : ");
+  Serial.print(jarak);
+  Serial.println(" cm");
+
+  data_us[i] = jarak;
+
+  if (jarak <= 15){
+    digitalWrite(ledM, HIGH);
+    digitalWrite(ledH, LOW);
+  } else {
+    digitalWrite(ledM, LOW);
+    digitalWrite(ledH, HIGH);
+  }
+}
+
+void loop(){
+  ultrasonic(triggerPin1, echoPin1, ledMerah1, ledHijau1, 0);
+  ultrasonic(triggerPin2, echoPin2, ledMerah2, ledHijau2, 1);
+
+  esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &data, sizeof(data));
+
+  if (result == ESP_OK) {
+    Serial.println("Sent with success");
+  }
+  else {
+    Serial.println("Error sending the data");
+  }
+
+  data.us1 = data_us[0];
+  data.us2 = data_us[1];
+
+  delay(1000);
+}
