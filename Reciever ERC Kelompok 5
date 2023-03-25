@@ -1,0 +1,105 @@
+#include <ESP8266WiFi.h>
+#include <espnow.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+LiquidCrystal_I2C lcd(0x27, 20, 4);
+
+const int sampleWindow = 50;
+unsigned int sample;
+ 
+#define SENSOR_PIN A0
+
+typedef struct struct_message 
+{
+    float us1;
+    float us2;
+} struct_message;
+
+struct_message data;
+
+void OnDataRecv(uint8_t * mac, uint8_t *incomingData, uint8_t len) 
+{
+  memcpy(&data, incomingData, sizeof(data));
+  lcd.setCursor(0, 2);
+  lcd.print("Jarak 1: "); 
+  lcd.print(data.us1);
+  lcd.print(" cm");
+
+  lcd.setCursor(0, 3);
+  lcd.print("Jarak 2: ");
+  lcd.print(data.us2);
+  lcd.print(" cm");
+}
+ 
+void setup() {
+  Serial.begin(115200);
+  pinMode (SENSOR_PIN, INPUT);
+  lcd.backlight();
+
+  WiFi.mode(WIFI_STA);
+
+  if (esp_now_init() != 0) {
+    Serial.println("Error initializing ESP-NOW");
+    return;
+  }
+ 
+  esp_now_set_self_role(ESP_NOW_ROLE_SLAVE);
+  esp_now_register_recv_cb(OnDataRecv);
+}
+
+void loop() 
+{
+  unsigned long startMillis= millis();                   
+  float peakToPeak = 0;                                  
+ 
+  unsigned int signalMax = 0;                            
+  unsigned int signalMin = 1024;                         
+                                                       
+  while (millis() - startMillis < sampleWindow)
+  {
+     sample = analogRead(SENSOR_PIN);                    
+     if (sample < 1024)                                  
+     {
+        if (sample > signalMax)
+        {
+           signalMax = sample;                          
+        }
+        
+        else if (sample < signalMin)
+        {
+           signalMin = sample;                           
+        }
+     }
+  }
+ 
+  peakToPeak = signalMax - signalMin;                    
+  int db = map(peakToPeak,20,900,49.5,90);             
+ 
+  lcd.setCursor(0, 0);
+  lcd.print("Loudness: ");
+  lcd.print(db);
+  lcd.print("dB        ");
+  
+  Serial.println(db);
+
+  if (db <= 60)
+  {
+    lcd.setCursor(0, 1);
+    lcd.print("Level: Quite        ");
+    
+  }
+
+  else if (db > 60 && db<85)
+  {
+    lcd.setCursor(0, 1);
+    lcd.print("Level: Moderate     ");
+  }
+
+  else if (db>=85)
+  {
+    lcd.setCursor(0, 1);
+    lcd.print("Level: High         ");
+  }
+   
+   delay(500); 
+}
